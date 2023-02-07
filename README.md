@@ -1,3 +1,25 @@
+# Notes from running on Puhti
+
+Pulling the Singularity image requires these two commands:
+~~~
+apptainer remote add --no-login SylabsCloud cloud.sylabs.io
+apptainer remote use SylabsCloud
+~~~
+
+However, do not use the Singularity image, as it assumes that conda packages are installed outside of the container. Instead build new apptainer image that installs the conda packages inside the container.
+
+To get snakemake running without using conda outside of containers, load snakemake module. Snakemake requires conda command, so miniconda needs to be installed (but it's not actually used, so should be alright). pyyaml module also needs to be installed in the python used when snakemake is launched. There doesn't seem to be any way of getting around installing miniconda, since Tykky won't allow starting new containers (since it is a container itself, and no nesting apparently)
+
+To load cuda and cudnn modules:
+~~~
+module load gcc/9.4.0 cuda cuddn
+~~~
+
+Snakemake version needs to be updated to current, since the original version in this repo will treat apptainer versions as too low (fixed last summer in Snakemake).
+
+The default setting is to use bind /tmp in login node to Singularity/Apptainer container, this will lead to quota problems when setting up conda in container. Bind it to a folder in scratch.
+
+
 # Firefox Translations training
 Training pipelines for Firefox Translations machine translation models.
 The trained models are hosted in [firefox-translations-models](https://github.com/mozilla/firefox-translations-models/),
