@@ -23,6 +23,7 @@ The default setting is to use bind /tmp in login node to Singularity/Apptainer c
 
 It would simplify things enormously to have all the dependencies included in a single apptainer image. This includes the conda modules and the various other software used. Running the Makefile with make git-modules should run during container creation. Before creating the apptainer image, test the conda packages locally to see they work (use snakemake's --until TARGET flag to run indivual parts of the workflow)
 
+To build GPU software on non-GPU computer, use stub in CUDA_DIR/lib64/stubs/libcuda.so (not tested yet, but should work)
 
 # Firefox Translations training
 Training pipelines for Firefox Translations machine translation models.
