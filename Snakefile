@@ -13,7 +13,7 @@ min_version("6.6.1")
 
 ### configuration
 
-container: 'Singularity.sif'
+containerized: 'Ftt.sif'
 
 install_deps = config['deps'] == 'true'
 data_root_dir = config['root']
