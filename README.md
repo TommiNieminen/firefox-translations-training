@@ -19,6 +19,10 @@ Snakemake version needs to be updated to current, since the original version in 
 
 The default setting is to use bind /tmp in login node to Singularity/Apptainer container, this will lead to quota problems when setting up conda in container. Bind it to a folder in scratch.
 
+# Building a self-contained Apptainer image
+
+It would simplify things enormously to have all the dependencies included in a single apptainer image. This includes the conda modules and the various other software used. Running the Makefile with make git-modules should run during container creation.
+
 
 # Firefox Translations training
 Training pipelines for Firefox Translations machine translation models.
