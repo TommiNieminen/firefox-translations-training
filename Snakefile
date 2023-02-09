@@ -169,6 +169,11 @@ clean_corpus_src = f'{clean_corpus_prefix}.{src}.gz'
 clean_corpus_trg = f'{clean_corpus_prefix}.{trg}.gz'
 
 
+#TODO: pretrained teacher
+# assign pretrained teacher dir to pretrained model dir
+# get the translation started with manually installed model, but add 
+# a rule later for downloading model from pouta/a3s.
+
 # augmentation
 
 if mono_trg_datasets:
