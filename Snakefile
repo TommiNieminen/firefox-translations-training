@@ -32,10 +32,11 @@ experiment = config['experiment']['name']
 
 mono_max_sent_src = config['experiment']['mono-max-sentences-src']
 mono_max_sent_trg = config['experiment']['mono-max-sentences-trg']
-bicl_default_threshold = config['experiment']['bicleaner']['default-threshold']
-bicl_dataset_thresholds = config['experiment']['bicleaner']['dataset-thresholds']
+
 backward_pretrained = config['experiment']['backward-model']
+backward_pretrained_vocab = config['experiment']['backward-vocab']
 vocab_pretrained = config['experiment']['vocab']
+
 
 experiment_dir=f"{data_root_dir}/experiments/{src}-{trg}/{experiment}"
 
@@ -47,14 +48,15 @@ marian_args = {name: ' '.join([f'--{k} {v}' for k,v in conf.items() ])
 train_datasets = config['datasets']['train']
 valid_datasets = config['datasets']['devtest']
 eval_datasets = config['datasets']['test']
-mono_src_datasets = config['datasets']['mono-src']
-mono_trg_datasets = config['datasets']['mono-trg']
+mono_src_datasets = config['datasets'].get('mono-src')
+mono_trg_datasets = config['datasets'].get('mono-trg')
 mono_datasets = {src: mono_src_datasets, trg: mono_trg_datasets}
 mono_max_sent = {src: mono_max_sent_src, trg: mono_max_sent_trg}
 
 # parallelization
 
-ensemble = list(range(config['experiment']['teacher-ensemble']))
+ensemble = list(range(config['experiment'].get('teacher-ensemble',0)))
+
 split_length = config['experiment']['split-length']
 
 # logging
@@ -105,8 +107,12 @@ exported_dir = f"{models_dir}/exported"
 best_model_metric = config['experiment']['best-model']
 best_model = f"final.model.npz.best-{best_model_metric}.npz"
 backward_dir = f'{models_dir}/backward'
-spm_sample_size=config['experiment']['spm-sample-size']
-vocab_path=vocab_pretrained or f"{models_dir}/vocab/vocab.spm"
+spm_sample_size=config['experiment'].get('spm-sample-size')
+vocab_path = vocab_pretrained or f"{models_dir}/vocab/vocab.spm"
+if 'backward-vocab' in config['experiment']:
+    backward_vocab_path = config['experiment']['backward-vocab'] 
+else:
+    backward_vocab_path = vocab_path
 
 #evaluation
 eval_data_dir = f"{original}/eval"
@@ -153,7 +159,15 @@ else:
 
 # bicleaner
 
-bicleaner_type = packs.find(src, trg)
+
+if 'bicleaner' in config['experiment']:
+    bicl_default_threshold = config['experiment']['bicleaner']['default-threshold']
+    bicl_dataset_thresholds = config['experiment']['bicleaner']['dataset-thresholds']
+
+    bicleaner_type = packs.find(src, trg)
+else:
+    bicleaner_type = None    
+
 bicleaner_env = "envs/bicleaner-ai.yml" if bicleaner_type == 'bicleaner-ai' else 'envs/bicleaner.yml'
 
 if bicleaner_type:
@@ -495,21 +509,39 @@ if augment_corpus:
                     "{input.src1}" "{input.src2}" "{input.trg1}" "{input.trg2}" "{output.res_src}" "{output.res_trg}" \
                       >> {log} 2>&1'''
 
-rule train_teacher:
-    message: "Training teacher on all data"
-    log: f"{log_dir}/train_teacher{{ens}}.log"
-    conda: "envs/base.yml"
-    threads: gpus_num*2
-    resources: gpu=gpus_num
-    input:
-        rules.merge_devset.output, train_src=f'{teacher_corpus}.{src}.gz',train_trg=f'{teacher_corpus}.{trg}.gz',
-        bin=ancient(trainer), vocab=vocab_path
-    output: model=f'{teacher_base_dir}{{ens}}/{best_model}'
-    params: prefix_train=teacher_corpus, prefix_test=f"{original}/devset", dir=directory(f'{teacher_base_dir}{{ens}}'),
-            args=get_args("training-teacher-base")
-    shell: '''bash pipeline/train/train.sh \
-                teacher train {src} {trg} "{params.prefix_train}" "{params.prefix_test}" "{params.dir}" \
-                "{input.vocab}" "{best_model_metric}" {params.args} >> {log} 2>&1'''
+
+# corpus
+# TODO: produce clean corpus from the OPUS-MT training corpus (sentencepiece)
+if 'forward_model' in config['experiment']:
+    rule download_teacher_model:
+        message: "Downloading OPUS-MT teacher model"
+        log: f"{log_dir}/download_teacher{{ens}}.log"
+        conda: "envs/base.yml"
+        threads: 1
+        output: model=f'{teacher_base_dir}{{ens}}/{best_model}'
+        params: prefix_train=teacher_corpus, prefix_test=f"{original}/devset", dir=directory(f'{teacher_base_dir}{{ens}}'),
+                args=get_args("training-teacher-base")
+        shell: 'bash -c touch output.model'
+
+else:
+    rule train_teacher:
+        message: "Training teacher on all data"
+        log: f"{log_dir}/train_teacher{{ens}}.log"
+        conda: "envs/base.yml"
+        threads: gpus_num*2
+        resources: gpu=gpus_num
+        input:
+            rules.merge_devset.output, train_src=f'{teacher_corpus}.{src}.gz',train_trg=f'{teacher_corpus}.{trg}.gz',
+            bin=ancient(trainer), vocab=vocab_path
+        output: model=f'{teacher_base_dir}{{ens}}/{best_model}'
+        params: prefix_train=teacher_corpus, prefix_test=f"{original}/devset", dir=directory(f'{teacher_base_dir}{{ens}}'),
+                args=get_args("training-teacher-base")
+        shell: '''bash pipeline/train/train.sh \
+                    teacher train {src} {trg} "{params.prefix_train}" "{params.prefix_test}" "{params.dir}" \
+                    "{input.vocab}" "{best_model_metric}" {params.args} >> {log} 2>&1'''
+
+    
+
 
 if augment_corpus:
     rule finetune_teacher:
@@ -531,8 +563,6 @@ if augment_corpus:
                     "{input.vocab}" "{best_model_metric}" --pretrained-model "{input.model}" {params.args} >> {log} 2>&1'''
 
 ### translation with teacher
-
-# corpus
 
 checkpoint split_corpus:
     message: "Splitting the corpus to translate"
