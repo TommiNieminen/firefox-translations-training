@@ -8,7 +8,7 @@ config:
   # install dependencies on a local machine
   - deps=true
   # root path to a folder with data, models and logs
-  - root=/home/tommi/greennlp/data
+  - root=/home/tommin/greennlp/data
   - cuda=/usr/local/cuda
   - cudnn=/cudnn
   # how much memory Marian reserves on a GPU

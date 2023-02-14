@@ -387,17 +387,29 @@ if use_bicleaner:
                     "{params.prefix_input}" "{params.prefix_output}" {params.threshold} {bicleaner_type} {threads} \
                     "{input.pack_dir}" >> {log} 2>&1'''
 
-rule merge_corpus:
-    message: "Merging clean parallel datasets"
-    log: f"{log_dir}/merge_corpus.log"
-    conda: "envs/base.yml"
-    threads: workflow.cores
-    # group: "clean_corpus"
-    input:  expand(f"{clean_corpus_prefix}/{{dataset}}.{{lang}}.gz", dataset=train_datasets, lang=[src, trg]),
-            bin=ancient(deduper)
-    output: src=clean_corpus_src,trg=clean_corpus_trg
-    params: prefix_output=clean_corpus_prefix, prefixes=expand(f"{clean_corpus_prefix}/{{dataset}}", dataset=train_datasets)
-    shell: '''bash pipeline/clean/merge-corpus.sh "{params.prefix_output}" {params.prefixes} >> {log} 2>&1'''
+
+#TODO: implement downloading and preprocessing of the training data based on the model.yml file (so this should probably come after
+# model download)
+if 'forward-model' in config['experiment']:
+    rule use_existing_preprocessed_corpus:
+        message: "Using existing preprocessed corpus"
+        log: f"{log_dir}/use_existing.log"
+        conda: "envs/base.yml"
+        threads: 1
+        output: src=clean_corpus_src,trg=clean_corpus_trg
+        shell: '''bash -c touch output.src && touch output.trg'''
+else:
+    rule merge_corpus:
+        message: "Merging clean parallel datasets"
+        log: f"{log_dir}/merge_corpus.log"
+        conda: "envs/base.yml"
+        threads: workflow.cores
+        # group: "clean_corpus"
+        input:  expand(f"{clean_corpus_prefix}/{{dataset}}.{{lang}}.gz", dataset=train_datasets, lang=[src, trg]),
+                bin=ancient(deduper)
+        output: src=clean_corpus_src,trg=clean_corpus_trg
+        params: prefix_output=clean_corpus_prefix, prefixes=expand(f"{clean_corpus_prefix}/{{dataset}}", dataset=train_datasets)
+        shell: '''bash pipeline/clean/merge-corpus.sh "{params.prefix_output}" {params.prefixes} >> {log} 2>&1'''
 
 rule merge_devset:
     message: "Merging devsets"
@@ -509,10 +521,8 @@ if augment_corpus:
                     "{input.src1}" "{input.src2}" "{input.trg1}" "{input.trg2}" "{output.res_src}" "{output.res_trg}" \
                       >> {log} 2>&1'''
 
-
-# corpus
-# TODO: produce clean corpus from the OPUS-MT training corpus (sentencepiece)
-if 'forward_model' in config['experiment']:
+#TODO: actually implement the downloading of OPUS-MT models, now it expects the model just to be there
+if 'forward-model' in config['experiment']:
     rule download_teacher_model:
         message: "Downloading OPUS-MT teacher model"
         log: f"{log_dir}/download_teacher{{ens}}.log"

@@ -1,0 +1,58 @@
+####
+# Example of a production config
+# Change language pair, experiment name, datasets and other settings if needed
+# Training low resource languages might require more tuning of pipeline/training/configs
+###
+
+
+experiment:
+  name: opusmt
+  src: en
+  trg: fi
+
+  #OPUS models are not ensembled, they have different vocabs anyway
+  #teacher-ensemble: 1
+ 
+  # pretrained model dir path 
+  forward-model: "/home/tommin/greennlp/data/models/en-fi/opusmt/opusTCv20210807+bt-2021-09-01"
+
+  # path to a pretrained backward model (optional)
+  backward-model: "/home/tommin/greennlp/data/models/fi-en/opusmt/opusTCv20210807+bt-2021-08-25"
+  # path to a pretrained vocabulary (optional)
+  vocab: "/home/tommin/greennlp/data/models/en-fi/opusmt/opusTCv20210807+bt-2021-09-01/opusTCv20210807+bt.spm32k-spm32k.vocab.yml"
+  # OPUS-MT models are trained with different vocabs
+  backward-vocab: "/home/tommin/greennlp/data/models/fi-en/opusmt/opusTCv20210807+bt-2021-08-25/opusTCv20210807+bt.spm32k-spm32k.vocab.yml"
+
+  # limits per downloaded dataset
+  mono-max-sentences-src: 100000000
+  mono-max-sentences-trg: 20000000
+
+  # split corpus to parallelize translation
+  split-length: 2000000
+  
+  best-model: perplexity
+
+marian-args:
+  decoding-teacher:
+    # 2080ti or newer
+    precision: float16
+
+#TODO: extract this info straight from the OPUS model yml info file
+datasets:
+  # parallel training corpus
+  train:
+    - Tatoeba-train-v2021-08-07
+  
+  # datasets to merge for validation while training
+  devtest:
+    - Tatoeba-dev-v2021-08-07
+  # datasets for evaluation
+  test:
+    - newsdev2015-enfi.eng-fin
+    - newstest2015-enfi.eng-fin
+    - newstest2016-enfi.eng-fin
+    - newstest2017-enfi.eng-fin
+    - newstest2018-enfi.eng-fin
+    - newstest2019-enfi.eng-fin
+    - newstestB2016-enfi.eng-fin
+    - Tatoeba-test-v2021-08-07.eng-fin 
