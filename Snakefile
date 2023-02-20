@@ -42,7 +42,9 @@ experiment_dir=f"{data_root_dir}/experiments/{src}-{trg}/{experiment}"
 
 # override marian cofings
 marian_args = {name: ' '.join([f'--{k} {v}' for k,v in conf.items() ])
-               for name, conf in config['marian-args'].items()}
+               for name, conf in config.get('marian-args',{}).items()}
+
+opusmt_teacher = config['experiment']['opusmt-teacher']
 
 # datasets
 train_datasets = config['datasets']['train']
@@ -168,6 +170,11 @@ if 'bicleaner' in config['experiment']:
 else:
     bicleaner_type = None    
 
+#this is a problematic way of defining envs, since only one of these envs will be containerized, change
+#this to include both envs always
+#HACK, bicleaner_ai env not currently in container
+#TODO: combine bicleaner and bicleaner_ai envs to include both in container
+bicleaner_type = "bicleaner"
 bicleaner_env = "envs/bicleaner-ai.yml" if bicleaner_type == 'bicleaner-ai' else 'envs/bicleaner.yml'
 
 if bicleaner_type:
@@ -292,7 +299,8 @@ rule extract_lex:
     shell: 'bash pipeline/setup/compile-extract-lex.sh {extract_lex_build} {threads} >> {log} 2>&1'
 
 # data downloading
-
+# TODO: Tatoeba data has dev, test and train in same big tar, make a rule producing them all,
+# and use snakemake ruleorder to prioritize it over this
 rule download_corpus:
     message: "Downloading parallel corpus"
     log: f"{log_dir}/download_corpus/{{kind}}/{{dataset}}.log"
@@ -374,7 +382,7 @@ if use_bicleaner:
         conda: bicleaner_env
 #       group: "bicleaner"
         threads: gpus_num * 2 if bicleaner_type == "bicleaner-ai" else workflow.cores
-        resources: gpu=gpus_num if bicleaner_type == "bicleaner-ai" else 0
+        resources: gpu=gpus_num if bicleaner_type == "bicleaner-ai" else 0, mem_mb=64000
         input: ancient(rules.kenlm.output), multiext(f"{clean}/corpus/{{dataset}}", f".{src}.gz", f".{trg}.gz"),
                 pack_dir=rules.bicleaner_pack.output
         output: multiext(f"{biclean}/corpus/{{dataset}}", f".{src}.gz", f".{trg}.gz")
@@ -390,26 +398,20 @@ if use_bicleaner:
 
 #TODO: implement downloading and preprocessing of the training data based on the model.yml file (so this should probably come after
 # model download)
-if 'forward-model' in config['experiment']:
-    rule use_existing_preprocessed_corpus:
-        message: "Using existing preprocessed corpus"
-        log: f"{log_dir}/use_existing.log"
-        conda: "envs/base.yml"
-        threads: 1
-        output: src=clean_corpus_src,trg=clean_corpus_trg
-        shell: '''bash -c touch output.src && touch output.trg'''
-else:
-    rule merge_corpus:
-        message: "Merging clean parallel datasets"
-        log: f"{log_dir}/merge_corpus.log"
-        conda: "envs/base.yml"
-        threads: workflow.cores
-        # group: "clean_corpus"
-        input:  expand(f"{clean_corpus_prefix}/{{dataset}}.{{lang}}.gz", dataset=train_datasets, lang=[src, trg]),
-                bin=ancient(deduper)
-        output: src=clean_corpus_src,trg=clean_corpus_trg
-        params: prefix_output=clean_corpus_prefix, prefixes=expand(f"{clean_corpus_prefix}/{{dataset}}", dataset=train_datasets)
-        shell: '''bash pipeline/clean/merge-corpus.sh "{params.prefix_output}" {params.prefixes} >> {log} 2>&1'''
+#TODO: add sentencepiece preprocessing, doesn't seem the integrated sentencepiece is working
+#
+
+rule merge_corpus:
+    message: "Merging clean parallel datasets"
+    log: f"{log_dir}/merge_corpus.log"
+    conda: "envs/base.yml"
+    threads: workflow.cores
+    # group: "clean_corpus"
+    input:  expand(f"{clean_corpus_prefix}/{{dataset}}.{{lang}}.gz", dataset=train_datasets, lang=[src, trg]),
+            bin=ancient(deduper)
+    output: src=clean_corpus_src,trg=clean_corpus_trg
+    params: prefix_output=clean_corpus_prefix, prefixes=expand(f"{clean_corpus_prefix}/{{dataset}}", dataset=train_datasets)
+    shell: '''bash pipeline/clean/merge-corpus.sh "{params.prefix_output}" {params.prefixes} >> {log} 2>&1'''
 
 rule merge_devset:
     message: "Merging devsets"
@@ -522,7 +524,7 @@ if augment_corpus:
                       >> {log} 2>&1'''
 
 #TODO: actually implement the downloading of OPUS-MT models, now it expects the model just to be there
-if 'forward-model' in config['experiment']:
+if 'opusmt-teacher' in config['experiment']:
     rule download_teacher_model:
         message: "Downloading OPUS-MT teacher model"
         log: f"{log_dir}/download_teacher{{ens}}.log"
@@ -584,6 +586,42 @@ checkpoint split_corpus:
     shell: '''bash pipeline/translate/split-corpus.sh \
                 {input.corpus_src} {input.corpus_trg} {output} {split_length} >> {log} 2>&1'''
 
+if opusmt_teacher:
+    teacher_source_file = f'{translated}/corpus/file.{{part}}.opusmt'
+    deseg_nbest_file = f'{teacher_source_file}.nbest.deseg'
+else:    
+    teacher_source_file = f'{translated}/corpus/file.{{part}}'
+    deseg_nbest_file = f'{teacher_source_file}.nbest'
+
+    
+
+#This is an optional rule that only applies when OPUS-MT model is used as teacher.
+#Required due to OPUS-MT models not using the integrated SentencePiece in Marian
+rule opusmt_preprocess_corpus:
+    message: "Preprocessing source file for OPUS-MT model"
+    log: f"{log_dir}/opusmt_preprocess_corpus/{{part}}.log"
+    conda: "envs/base.yml"
+    threads: 1
+    input: 
+        file=f'{translated}/corpus/file.{{part}}', 
+        teacher_models=expand(f"{final_teacher_dir}{{ens}}/{best_model}",ens=ensemble)
+    output: f'{translated}/corpus/file.{{part}}.opusmt'
+    shell: '''bash pipeline/translate/opusmt-preprocess.sh \
+                {input.file} {input.teacher_models} src >> {log} 2>&1'''
+     
+rule opusmt_deseg_nbest:
+    message: "Desegmenting OPUS-MT model nbest list"
+    log: f"{log_dir}/opusmt_deseg_translation/{{part}}.log"
+    threads: 1
+    input: nbest=f"{teacher_source_file}.nbest"
+    output: deseg_nbest_file
+    run: 
+        with open(input[0], "rt", encoding="utf8") as infile,open(output[0], "wt", encoding="utf8") as outfile:
+            for line in infile:
+                line_split = line.split(" ||| ")
+                line_split[1] = line_split[1].replace(" ","").replace("▁"," ")
+                out.write(" ||| ".join(line_split))
+
 rule translate_corpus:
     message: "Translating corpus with teacher"
     log: f"{log_dir}/translate_corpus/{{part}}.log"
@@ -592,10 +630,10 @@ rule translate_corpus:
     resources: gpu=gpus_num
     input:
         ancient(decoder),
-        file=f'{translated}/corpus/file.{{part}}',
+        file=teacher_source_file,
         vocab=vocab_path,
         teacher_models=expand(f"{final_teacher_dir}{{ens}}/{best_model}",ens=ensemble)
-    output: f'{translated}/corpus/file.{{part}}.nbest'
+    output: f'{teacher_source_file}.nbest'
     params: args=get_args('decoding-teacher')
     shell: '''bash pipeline/translate/translate-nbest.sh \
                 "{input.file}" "{input.vocab}" {input.teacher_models} {params.args} >> {log} 2>&1'''
@@ -606,7 +644,7 @@ rule extract_best:
     conda: "envs/base.yml"
     threads: 1
     #group 'translate_corpus'
-    input: nbest=f"{translated}/corpus/file.{{part}}.nbest", ref=f"{translated}/corpus/file.{{part}}.ref"
+    input: nbest=deseg_nbest_file, ref=f"{translated}/corpus/file.{{part}}.ref"
     output: f"{translated}/corpus/file.{{part}}.nbest.out"
     shell: 'python pipeline/translate/bestbleu.py -i {input.nbest} -r {input.ref} -m bleu -o {output} >> {log} 2>&1'
 
@@ -664,22 +702,37 @@ rule collect_mono_src:
 
 # merge
 
-rule merge_translated:
-    message: "Merging translated datasets"
-    log: f"{log_dir}/merge_translated.log"
-    conda: "envs/base.yml"
-    threads: 4
-    #group 'mono_src'
-    input:
-        src1=clean_corpus_src,src2=f"{clean}/mono.{src}.gz",
-        trg1=rules.collect_corpus.output,trg2=rules.collect_mono_src.output,
-        bin=ancient(deduper)
-    output: res_src=f'{merged}/corpus.{src}.gz',res_trg=f'{merged}/corpus.{trg}.gz'
-    shell: '''bash pipeline/translate/merge-corpus.sh \
-                "{input.src1}" "{input.src2}" "{input.trg1}" "{input.trg2}" "{output.res_src}" "{output.res_trg}" \
-                  >> {log} 2>&1'''
-
-# train student
+# Bypass merge if there are no mono src datasets
+# TODO: do this some other way, shouldn't need this rule if no mono
+if mono_src_datasets is None:
+    rule merge_translated:
+        message: "Merging translated datasets"
+        log: f"{log_dir}/merge_translated.log"
+        conda: "envs/base.yml"
+        threads: 4
+        #group 'mono_src'
+        input:
+            src1=clean_corpus_src,
+            trg1=rules.collect_corpus.output
+        output: res_src=f'{merged}/corpus.{src}.gz',res_trg=f'{merged}/corpus.{trg}.gz'
+        shell: '''ln -s "{input.src1}" "{output.res_src}" ln -s "{input.trg1}" "{output.res_trg}" \
+                      >> {log} 2>&1'''
+else:
+    rule merge_translated:
+        message: "Merging translated datasets"
+        log: f"{log_dir}/merge_translated.log"
+        conda: "envs/base.yml"
+        threads: 4
+        #group 'mono_src'
+        input:
+            src1=clean_corpus_src,src2=f"{clean}/mono.{src}.gz",
+            trg1=rules.collect_corpus.output,trg2=rules.collect_mono_src.output,
+            bin=ancient(deduper)
+        output: res_src=f'{merged}/corpus.{src}.gz',res_trg=f'{merged}/corpus.{trg}.gz'
+        shell: '''bash pipeline/translate/merge-corpus.sh \
+                    "{input.src1}" "{input.src2}" "{input.trg1}" "{input.trg2}" "{output.res_src}" "{output.res_trg}" \
+                      >> {log} 2>&1'''
+# train student 
 
 rule score:
     message: "Scoring"

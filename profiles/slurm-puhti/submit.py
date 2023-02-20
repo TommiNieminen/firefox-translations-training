@@ -42,9 +42,9 @@ if "resources" in job_properties:
             partition = cluster_config['multi-gpu-partition']
 
     # we don't need explicit memory limiting for now
-    # if 'mem_mb' in resources:
-    #     memory = str(resources['mem_mb'])
-    #     options += [f'--mem={memory}']
+    if 'mem_mb' in resources:
+        memory = str(resources['mem_mb']) 
+        options += [f'--mem={memory}']
 
 cuda_dir = os.getenv('CUDA_DIR')
 if cuda_dir:

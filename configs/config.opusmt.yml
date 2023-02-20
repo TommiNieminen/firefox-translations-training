@@ -11,17 +11,19 @@ experiment:
   trg: fi
 
   #OPUS models are not ensembled, they have different vocabs anyway
-  #teacher-ensemble: 1
- 
-  # pretrained model dir path 
-  forward-model: "/home/tommin/greennlp/data/models/en-fi/opusmt/opusTCv20210807+bt-2021-09-01"
+  teacher-ensemble: 1
+
+  #TODO: change this to be the identifier of the model to download
+  opusmt-teacher: True
 
   # path to a pretrained backward model (optional)
-  backward-model: "/home/tommin/greennlp/data/models/fi-en/opusmt/opusTCv20210807+bt-2021-08-25"
+  backward-model: "/scratch/project_2006944/tommi/firefox-translations-data/models/fi-en/opusmt/opusTCv20210807+bt-2021-08-25"
+  
   # path to a pretrained vocabulary (optional)
-  vocab: "/home/tommin/greennlp/data/models/en-fi/opusmt/opusTCv20210807+bt-2021-09-01/opusTCv20210807+bt.spm32k-spm32k.vocab.yml"
+  vocab: "/scratch/project_2006944/tommi/firefox-translations-data/models/en-fi/opusmt/opusTCv20210807+bt-2021-09-01/opusTCv20210807+bt.spm32k-spm32k.vocab.yml"
+
   # OPUS-MT models are trained with different vocabs
-  backward-vocab: "/home/tommin/greennlp/data/models/fi-en/opusmt/opusTCv20210807+bt-2021-08-25/opusTCv20210807+bt.spm32k-spm32k.vocab.yml"
+  backward-vocab: "/scratch/project_2006944/tommi/firefox-translations-data/models/fi-en/opusmt/opusTCv20210807+bt-2021-08-25/source.spm"
 
   # limits per downloaded dataset
   mono-max-sentences-src: 100000000
@@ -31,28 +33,24 @@ experiment:
   split-length: 2000000
   
   best-model: perplexity
+  bicleaner:
+    default-threshold: 0.5
+    dataset-thresholds:
+      tc_Tatoeba-train-v2021-08-07.eng.fin: 0.5
 
-marian-args:
-  decoding-teacher:
+#marian-args:
+#  decoding-teacher:
     # 2080ti or newer
-    precision: float16
+#    precision: float16
 
 #TODO: extract this info straight from the OPUS model yml info file
 datasets:
   # parallel training corpus
   train:
-    - Tatoeba-train-v2021-08-07
-  
+    - tc_Tatoeba-train-v2021-08-07.eng-fin 
   # datasets to merge for validation while training
   devtest:
-    - Tatoeba-dev-v2021-08-07
+    - tc_Tatoeba-dev-v2021-08-07.eng-fin
   # datasets for evaluation
   test:
-    - newsdev2015-enfi.eng-fin
-    - newstest2015-enfi.eng-fin
-    - newstest2016-enfi.eng-fin
-    - newstest2017-enfi.eng-fin
-    - newstest2018-enfi.eng-fin
-    - newstest2019-enfi.eng-fin
-    - newstestB2016-enfi.eng-fin
-    - Tatoeba-test-v2021-08-07.eng-fin 
+    - tc_Tatoeba-test-v2021-08-07.eng-fin 
