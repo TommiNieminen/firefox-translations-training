@@ -1,5 +1,6 @@
 import yaml
 import os
+import glob
 
 from snakemake.utils import min_version
 from pipeline.bicleaner import packs
@@ -45,6 +46,7 @@ marian_args = {name: ' '.join([f'--{k} {v}' for k,v in conf.items() ])
                for name, conf in config.get('marian-args',{}).items()}
 
 opusmt_teacher = config['experiment']['opusmt-teacher']
+opusmt_backward = config['experiment']['opusmt-backward']
 
 # datasets
 train_datasets = config['datasets']['train']
@@ -110,11 +112,17 @@ best_model_metric = config['experiment']['best-model']
 best_model = f"final.model.npz.best-{best_model_metric}.npz"
 backward_dir = f'{models_dir}/backward'
 spm_sample_size=config['experiment'].get('spm-sample-size')
+
+#default vocab path used with base ftt
 vocab_path = vocab_pretrained or f"{models_dir}/vocab/vocab.spm"
-if 'backward-vocab' in config['experiment']:
-    backward_vocab_path = config['experiment']['backward-vocab'] 
-else:
-    backward_vocab_path = vocab_path
+
+#if opus models are used as either teacher or backward models, use their vocabs
+if opusmt_teacher:
+   forward_vocab = f"{teacher_base_dir}0/vocab.yml"
+
+if opusmt_backward:
+   backward_vocab = f"{backward_dir}/vocab.yml"
+
 
 #evaluation
 eval_data_dir = f"{original}/eval"
@@ -151,13 +159,16 @@ if len(ensemble) > 1:
 if install_deps:
     results.append("/tmp/flags/setup.done")
 
-if not backward_pretrained:
+#three options for backward model: pretrained path, url to opus-mt, or train backward
+if backward_pretrained:
+    do_train_backward = False
+    backward_dir = backward_pretrained
+elif opusmt_backward:
+    do_train_backward = False 
+else:
     # don't evaluate pretrained model
     results.extend(expand(f'{eval_backward_dir}/{{dataset}}.metrics',dataset=eval_datasets))
     do_train_backward=True
-else:
-    do_train_backward = False
-    backward_dir = backward_pretrained
 
 # bicleaner
 
@@ -189,11 +200,6 @@ else:
 clean_corpus_src = f'{clean_corpus_prefix}.{src}.gz'
 clean_corpus_trg = f'{clean_corpus_prefix}.{trg}.gz'
 
-
-#TODO: pretrained teacher
-# assign pretrained teacher dir to pretrained model dir
-# get the translation started with manually installed model, but add 
-# a rule later for downloading model from pouta/a3s.
 
 # augmentation
 
@@ -470,6 +476,16 @@ if do_train_backward:
         shell: '''bash pipeline/train/train.sh \
                     backward train {trg} {src} "{params.prefix_train}" "{params.prefix_test}" "{backward_dir}" \
                     "{input.vocab}" "{best_model_metric}" {params.args} >> {log} 2>&1'''
+elif opusmt_backward:
+    rule download_opusmt_backward:
+        message: "Downloading OPUS-MT backward model"
+        log: f"{log_dir}/download_backward.log"
+        conda: "envs/base.yml"
+        output:  model=f'{backward_dir}/{best_model}'
+        shell: '''bash pipeline/opusmt/download-model.sh \
+                    "{opusmt_backward}" "{backward_dir}" "{best_model}" >> {log} 2>&1'''
+     
+
 
 if augment_corpus:
     checkpoint split_mono_trg:
@@ -534,7 +550,6 @@ if 'opusmt-teacher' in config['experiment']:
         params: prefix_train=teacher_corpus, prefix_test=f"{original}/devset", dir=directory(f'{teacher_base_dir}{{ens}}'),
                 args=get_args("training-teacher-base")
         shell: 'bash -c touch output.model'
-
 else:
     rule train_teacher:
         message: "Training teacher on all data"
@@ -607,7 +622,7 @@ rule opusmt_preprocess_corpus:
         teacher_models=expand(f"{final_teacher_dir}{{ens}}/{best_model}",ens=ensemble)
     output: f'{translated}/corpus/file.{{part}}.opusmt'
     shell: '''bash pipeline/translate/opusmt-preprocess.sh \
-                {input.file} {input.teacher_models} src >> {log} 2>&1'''
+                {input.file} {input.teacher_models} src "source.spm" >> {log} 2>&1'''
      
 rule opusmt_deseg_nbest:
     message: "Desegmenting OPUS-MT model nbest list"
@@ -620,7 +635,7 @@ rule opusmt_deseg_nbest:
             for line in infile:
                 line_split = line.split(" ||| ")
                 line_split[1] = line_split[1].replace(" ","").replace("▁"," ")
-                out.write(" ||| ".join(line_split))
+                outfile.write(" ||| ".join(line_split))
 
 rule translate_corpus:
     message: "Translating corpus with teacher"
@@ -687,52 +702,76 @@ rule translate_mono_src:
     shell: '''bash pipeline/translate/translate.sh "{input.file}" "{input.vocab}" {input.teacher_models} \
               {params.args} >> {log} 2>&1'''
 
-rule collect_mono_src:
-    message: "Collecting translated mono src dataset"
-    log: f"{log_dir}/collect_mono_src.log"
-    conda: "envs/base.yml"
-    threads: 4
-    #group 'mono_src'
-    input:
-       lambda wildcards: expand(f"{translated}/mono_src/file.{{part}}.out",
-           part=find_parts(wildcards, checkpoints.split_mono_src))
-    output: f'{translated}/mono.{trg}.gz'
-    params: src_mono=f"{clean}/mono.{src}.gz",dir=f'{translated}/mono_src'
-    shell: 'bash pipeline/translate/collect.sh "{params.dir}" "{output}" "{params.src_mono}" >> {log} 2>&1'
-
+#If there are no mono src datasets, create dummy output files, since the merge step
+#expects translated mono src files (TODO: separate deduping and shuffling from merge script
+#to remove the need for this workaround)
+if mono_src_datasets is None:
+    rule collect_mono_src:
+        message: "Collecting translated mono src dataset"
+        log: f"{log_dir}/collect_mono_src.log"
+        conda: "envs/base.yml"
+        threads: 1
+        #group 'mono_src'
+        output: trg_mono=f'{translated}/mono.{trg}.gz',src_mono=f"{clean}/mono.{src}.gz"
+        params: src_mono=f"{clean}/mono.{src}.gz",dir=f'{translated}/mono_src'
+        shell: 'touch {output.src_mono} && touch {output.trg_mono}  >> {log} 2>&1'
+else:
+    rule collect_mono_src:
+        message: "Collecting translated mono src dataset"
+        log: f"{log_dir}/collect_mono_src.log"
+        conda: "envs/base.yml"
+        threads: 4
+        #group 'mono_src'
+        input:
+           lambda wildcards: expand(f"{translated}/mono_src/file.{{part}}.out",
+               part=find_parts(wildcards, checkpoints.split_mono_src))
+        output: f'{translated}/mono.{trg}.gz'
+        params: src_mono=f"{clean}/mono.{src}.gz",dir=f'{translated}/mono_src'
+        shell: 'bash pipeline/translate/collect.sh "{params.dir}" "{output}" "{params.src_mono}" >> {log} 2>&1'
+    
 # merge
 
-# Bypass merge if there are no mono src datasets
-# TODO: do this some other way, shouldn't need this rule if no mono
-if mono_src_datasets is None:
-    rule merge_translated:
-        message: "Merging translated datasets"
-        log: f"{log_dir}/merge_translated.log"
-        conda: "envs/base.yml"
-        threads: 4
-        #group 'mono_src'
-        input:
-            src1=clean_corpus_src,
-            trg1=rules.collect_corpus.output
-        output: res_src=f'{merged}/corpus.{src}.gz',res_trg=f'{merged}/corpus.{trg}.gz'
-        shell: '''ln -s "{input.src1}" "{output.res_src}" ln -s "{input.trg1}" "{output.res_trg}" \
-                      >> {log} 2>&1'''
-else:
-    rule merge_translated:
-        message: "Merging translated datasets"
-        log: f"{log_dir}/merge_translated.log"
-        conda: "envs/base.yml"
-        threads: 4
-        #group 'mono_src'
-        input:
-            src1=clean_corpus_src,src2=f"{clean}/mono.{src}.gz",
-            trg1=rules.collect_corpus.output,trg2=rules.collect_mono_src.output,
-            bin=ancient(deduper)
-        output: res_src=f'{merged}/corpus.{src}.gz',res_trg=f'{merged}/corpus.{trg}.gz'
-        shell: '''bash pipeline/translate/merge-corpus.sh \
-                    "{input.src1}" "{input.src2}" "{input.trg1}" "{input.trg2}" "{output.res_src}" "{output.res_trg}" \
-                      >> {log} 2>&1'''
+rule merge_translated:
+    message: "Merging translated datasets"
+    log: f"{log_dir}/merge_translated.log"
+    conda: "envs/base.yml"
+    threads: 4
+    resources: mem_mb=64000
+    #group 'mono_src'
+    input:
+        src1=clean_corpus_src,src2=f"{clean}/mono.{src}.gz",
+        trg1=rules.collect_corpus.output,trg2=rules.collect_mono_src.output,
+        bin=ancient(deduper)
+    output: res_src=f'{merged}/corpus.{src}.gz',res_trg=f'{merged}/corpus.{trg}.gz'
+    shell: '''bash pipeline/translate/merge-corpus.sh \
+                "{input.src1}" "{input.src2}" "{input.trg1}" "{input.trg2}" "{output.res_src}" "{output.res_trg}" \
+                  >> {log} 2>&1'''
 # train student 
+
+# preprocess source and target when scoring with opusmt model (note that deseg is not required, since
+# scoring produces just scores)
+if opusmt_backward:
+    score_source = f"{rules.merge_translated.output.res_src}.opusmt"
+    score_target = f"{rules.merge_translated.output.res_trg}.opusmt"
+else:    
+    score_source = rules.merge_translated.output.res_src
+    score_target = rules.merge_translated.output.res_trg
+
+rule opusmt_preprocess_for_scoring:
+    message: "Preprocessing source file for OPUS-MT model"
+    log: f"{log_dir}/opusmt_preprocess_corpus/preprocess_for_scoring.log"
+    conda: "envs/base.yml"
+    threads: 1
+    input: 
+        res_src=rules.merge_translated.output.res_src,
+        res_trg=rules.merge_translated.output.res_trg,
+        model=f'{backward_dir}/{best_model}'
+    output: opusmt_source=f'{rules.merge_translated.output.res_src}.opusmt',
+            opusmt_target=f'{rules.merge_translated.output.res_trg}.opusmt'
+    shell: '''bash pipeline/translate/opusmt-preprocess.sh \
+              {input.res_src} {model} src "source.spm" && \
+              bash pipeline/translate/opusmt-preprocess.sh \
+              {input.res_trg} {model} trg "target.spm" >> {log} 2>&1'''
 
 rule score:
     message: "Scoring"
@@ -742,8 +781,8 @@ rule score:
     resources: gpu=gpus_num
     input:
         ancient(scorer),
-        model=f'{backward_dir}/{best_model}', vocab=vocab_path,
-        src_corpus=rules.merge_translated.output.res_src, trg_corpus=rules.merge_translated.output.res_trg
+        model=f'{backward_dir}/{best_model}', vocab=backward_vocab,
+        src_corpus=score_source, trg_corpus=score_target
     output: f"{filtered}/scores.txt"
     params: input_prefix=f'{merged}/corpus'
     shell: '''bash pipeline/cefilter/score.sh \
