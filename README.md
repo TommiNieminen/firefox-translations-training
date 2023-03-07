@@ -19,38 +19,24 @@ Containerization does not entirely solve the conda problem, since the Snakemake 
 # Non-containerized software
 FTT uses software that is not included in the containerized conda environments, including several marian installations and other NLP tools. These are automatically built as part of the pipeline. The Ftt.sif container includes the prerequisites for the software components. It's also possible to provide paths to separately built software installations. 
 
-# Getting started
-1. Clone the repo.
-2. Download the Ftt.sif container.
-3. 
+# Getting started on puhti
+1. Clone the repository.
+2. Download the Ftt.sif container to the repository root.
+3. Install conda: make conda
+4. Install snakemake: make snakemake
+5. Update submodules: make git-modules
+6. Edit configs/config.opusmt.yml to select correct language codes and models.
+7. Create a data directory (e.g. in the parent dir of the repository or elsewhere in scratch) and create a temp dir in it.
+8. Edit profiles/slurm-puhti/config.yaml and change the first and last bindings in the singularity-args section to point to your data directory, and also enter the data directory path as the root value of the config section.
+9. Load cuda modules: module load gcc/9.4.0 cuda cudnn
+10. Run pipeline: make run PROFILE="slurm-puhti"
 
+# Testing
+Since running the whole pipeline for a high-resource language pair will take a long time, there is a test config available for testing that everything works as it should. The test config is used by default, you can change into the full config by modifying the Makefile and changing config.opusmt-test.yml to config.opusmt.yml. You can also provide the config on the command line as the CONFIG parameter with make. Note that even the test config will take a long time if the training corpus is large (since translating the training data will take time). So to do a quick functionality check, pick a language pair with as little data as possible in Tatoeba-Challenge (while still having trained forward and backward models). The default epo-afr is good for quick checking (although note that bicleaner step will be skipped, as there are no bicleaner packs for those languages).
 
-# Notes from running on Puhti
+You can test the pipeline without running it by using make dry-run. If you want to build a specific file or rule, you can use the TARGET parameter with make. 
 
-Pulling the Singularity image requires these two commands:
-~~~
-apptainer remote add --no-login SylabsCloud cloud.sylabs.io
-apptainer remote use SylabsCloud
-~~~
-
-However, do not use the Singularity image, as it assumes that conda packages are installed outside of the container. Instead build new apptainer image that installs the conda packages inside the container.
-
-To get snakemake running without using conda outside of containers, load snakemake module. Snakemake requires conda command, so miniconda needs to be installed (but it's not actually used, so should be alright). pyyaml module also needs to be installed in the python used when snakemake is launched. There doesn't seem to be any way of getting around installing miniconda, since Tykky won't allow starting new containers (since it is a container itself, and no nesting apparently)
-
-To load cuda and cudnn modules:
-~~~
-module load gcc/9.4.0 cuda cuddn
-~~~
-
-Snakemake version needs to be updated to current, since the original version in this repo will treat apptainer versions as too low (fixed last summer in Snakemake).
-
-The default setting is to use bind /tmp in login node to Singularity/Apptainer container, this will lead to quota problems when setting up conda in container. Bind it to a folder in scratch.
-
-# Building a self-contained Apptainer image
-
-It would simplify things enormously to have all the dependencies included in a single apptainer image. This includes the conda modules and the various other software used. Running the Makefile with make git-modules should run during container creation. Before creating the apptainer image, test the conda packages locally to see they work (use snakemake's --until TARGET flag to run indivual parts of the workflow)
-
-To build GPU software on non-GPU computer, use stub in CUDA_DIR/lib64/stubs/libcuda.so (not tested yet, but should work)
+# Original FTT instructions start from here. NOTE: some of the information below no longer applies.
 
 # Firefox Translations training
 Training pipelines for Firefox Translations machine translation models.
