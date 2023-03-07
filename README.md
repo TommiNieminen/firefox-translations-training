@@ -31,6 +31,11 @@ FTT uses software that is not included in the containerized conda environments, 
 9. Load cuda modules: module load gcc/9.4.0 cuda cudnn
 10. Run pipeline: make run PROFILE="slurm-puhti"
 
+# Testing
+Since running the whole pipeline for a high-resource language pair will take a long time, there is a test config available for testing that everything works as it should. The test config is used by default, you can change into the full config by modifying the Makefile and changing config.opusmt-test.yml to config.opusmt.yml. You can also provide the config on the command line as the CONFIG parameter with make.
+
+You can test the pipeline without running it by using make dry-run. If you want to build a specific file or rule, you can use the TARGET parameter with make. 
+
 # Original FTT instructions start from here. NOTE: some of the information below no longer applies.
 
 # Firefox Translations training
