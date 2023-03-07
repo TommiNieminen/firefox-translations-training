@@ -4,7 +4,7 @@
 #parse properties json and get log file name
 log_file=$(echo '{properties}' | jq -r .log[0])
 
-export SINGULARITYENV_CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES
+export APPTAINERENV_CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES
 
 if command -v nvidia-smi &> /dev/null
 then

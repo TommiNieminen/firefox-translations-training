@@ -9,15 +9,19 @@ experiment:
   name: opusmt
   src: en
   trg: fi
+  src_three_letter: eng
+  trg_three_letter: fin
 
   #OPUS models are not ensembled, they have different vocabs anyway
   teacher-ensemble: 1
 
   #TODO: change this to be the identifier of the model to download
   opusmt-teacher: True
+  #URL to the OPUS-MT model to use as backward model
+  opusmt-backward: "https://object.pouta.csc.fi/Tatoeba-MT-models/fin-eng/opusTCv20210807+bt-2021-08-25.zip" 
 
   # path to a pretrained backward model (optional)
-  backward-model: "/scratch/project_2006944/tommi/firefox-translations-data/models/fi-en/opusmt/opusTCv20210807+bt-2021-08-25"
+  backward-model: ""
   
   # path to a pretrained vocabulary (optional)
   vocab: "/scratch/project_2006944/tommi/firefox-translations-data/models/en-fi/opusmt/opusTCv20210807+bt-2021-09-01/opusTCv20210807+bt.spm32k-spm32k.vocab.yml"
@@ -47,10 +51,10 @@ experiment:
 datasets:
   # parallel training corpus
   train:
-    - tc_Tatoeba-train-v2021-08-07.eng-fin 
+    - tc_Tatoeba-Challenge-v2021-08-07 
   # datasets to merge for validation while training
   devtest:
-    - tc_Tatoeba-dev-v2021-08-07.eng-fin
+    - tc_Tatoeba-Challenge-v2021-08-07
   # datasets for evaluation
   test:
-    - tc_Tatoeba-test-v2021-08-07.eng-fin 
+    - tc_Tatoeba-Challenge-v2021-08-07
