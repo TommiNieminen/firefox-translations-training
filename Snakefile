@@ -36,9 +36,9 @@ experiment = config['experiment']['name']
 mono_max_sent_src = config['experiment']['mono-max-sentences-src']
 mono_max_sent_trg = config['experiment']['mono-max-sentences-trg']
 
-backward_pretrained = config['experiment']['backward-model']
-backward_pretrained_vocab = config['experiment']['backward-vocab']
-vocab_pretrained = config['experiment']['vocab']
+backward_pretrained = config['experiment'].get('backward-model')
+backward_pretrained_vocab = config['experiment'].get('backward-vocab')
+vocab_pretrained = config['experiment'].get('vocab')
 
 
 experiment_dir=f"{data_root_dir}/experiments/{src}-{trg}/{experiment}"
@@ -195,7 +195,8 @@ else:
 #HACK, bicleaner_ai env not currently in container, so bicleaner type is forced
 #TODO: find a way to include both bicleaner and bicleaner_ai envs in generated container definition (dummy rules?)
 #or include the env manually.
-bicleaner_type = "bicleaner"
+if bicleaner_type == 'bicleaner-ai':
+    bicleaner_type = "bicleaner"
 bicleaner_env = "envs/bicleaner-ai.yml" if bicleaner_type == 'bicleaner-ai' else 'envs/bicleaner.yml'
 
 if bicleaner_type:
@@ -498,7 +499,7 @@ elif opusmt_backward:
         message: "Downloading OPUS-MT backward model"
         log: f"{log_dir}/download_backward.log"
         conda: "envs/base.yml"
-        output:  model=f'{backward_dir}/{best_model}'
+        output:  model=f'{backward_dir}/{best_model}',vocab=f'{backward_dir}/vocab.yml'
         shell: '''bash pipeline/opusmt/download-model.sh \
                     "{opusmt_backward}" "{backward_dir}" "{best_model}" >> {log} 2>&1'''
      
@@ -562,7 +563,7 @@ if 'opusmt-teacher' in config['experiment']:
         log: f"{log_dir}/download_teacher{{ens}}.log"
         conda: "envs/base.yml"
         threads: 1
-        output: model=f'{teacher_base_dir}{{ens}}/{best_model}'
+        output: model=f'{teacher_base_dir}{{ens}}/{best_model}',vocab=f'{teacher_base_dir}{{ens}}/vocab.yml'
         shell: '''bash pipeline/opusmt/download-model.sh \
                     "{opusmt_teacher}" "{teacher_base_dir}{{ens}}" "{best_model}" >> {log} 2>&1'''
 else:
