@@ -20,9 +20,16 @@ Containerization does not entirely solve the conda problem, since the Snakemake 
 FTT uses software that is not included in the containerized conda environments, including several marian installations and other NLP tools. These are automatically built as part of the pipeline. The Ftt.sif container includes the prerequisites for the software components. It's also possible to provide paths to separately built software installations. 
 
 # Getting started
-1. Clone the repo.
-2. Download the Ftt.sif container.
-3. 
+1. Clone the repository.
+2. Download the Ftt.sif container to the repository root.
+3. Install conda: make conda
+4. Install snakemake: make snakemake
+5. Update submodules: make git-modules
+6. Edit configs/config.opusmt.yml to select correct language codes and models.
+7. Create a data directory (e.g. in the parent dir of the repository) and create a temp dir in it.
+8. Edit profiles/slurm-puhti/config.yaml and change the first and last bindings in the singularity-args section to point to your data directory, and also enter the data directory path as the root value of the config section.
+9. Load cuda modules: module load gcc/9.4.0 cuda cudnn
+7. Run pipeline: make run --profile slurm-puhti
 
 
 # Notes from running on Puhti
