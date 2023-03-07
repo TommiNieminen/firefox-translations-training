@@ -22,7 +22,10 @@ unzip -j -o "${archive_path}"
 rm ${archive_path}
 
 model_file=$(ls *.npz)
+vocab_file=$(ls *vocab.yml)
 #Create a soft link for the model with the name that the workflow expects 
 ln -s $model_file ${best_model}
+#Also create a standard name link for the vocab
+ln -s $vocab_file "vocab.yml"
 
 echo "###### Done: Downloading and extracting opus mt model"
