@@ -28,4 +28,6 @@ ln -s $model_file ${best_model}
 #Also create a standard name link for the vocab
 ln -s $vocab_file "vocab.yml"
 
+#modify preprocess script to remove host check
+
 echo "###### Done: Downloading and extracting opus mt model"

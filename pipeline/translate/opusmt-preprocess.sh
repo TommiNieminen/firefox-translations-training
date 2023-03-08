@@ -17,9 +17,9 @@ model_dir=$(dirname $2)
 
 if [ "${source_file##*.}" == "gz" ]; then
     echo "source file is gzipped"
-    zcat $1 | ${model_dir}/preprocess.sh $3 "${model_dir}/${spm_name}" | gzip > ${source_file%%.gz}.opusmt.gz
+    zcat $1 | pipeline/translate/preprocess.sh $3 "${model_dir}/${spm_name}" | gzip > ${source_file%%.gz}.opusmt.gz
 else
     echo "source file is not gzipped"
-    cat $1 | ${model_dir}/preprocess.sh $3 "${model_dir}/${spm_name}"  > $1.opusmt
+    pipeline/translate/preprocess.sh $3 "${model_dir}/${spm_name}" < $1 > $1.opusmt
 fi
  

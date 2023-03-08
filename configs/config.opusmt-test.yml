@@ -7,18 +7,18 @@
 
 experiment:
   name: opusmt
-  src: en
-  trg: fi
-  src_three_letter: eng
-  trg_three_letter: fin
+  src: eo
+  trg: af
+  src_three_letter: epo
+  trg_three_letter: afr
 
   #OPUS models are not ensembled, they have different vocabs anyway
   teacher-ensemble: 1
 
   #URL to the OPUS-MT model to use as the teacher
-  opusmt-teacher: True
+  opusmt-teacher: "https://object.pouta.csc.fi/Tatoeba-MT-models/epo-afr/opus-2021-02-18.zip"
   #URL to the OPUS-MT model to use as the backward model
-  opusmt-backward: "https://object.pouta.csc.fi/Tatoeba-MT-models/fin-eng/opusTCv20210807+bt-2021-08-25.zip" 
+  opusmt-backward: "https://object.pouta.csc.fi/Tatoeba-MT-models/afr-epo/opus-2021-02-19.zip" 
 
   # path to a pretrained backward model (optional)
   backward-model: ""
@@ -34,7 +34,38 @@ experiment:
   bicleaner:
     default-threshold: 0.5
     dataset-thresholds:
-      tc_Tatoeba-train-v2021-08-07.eng.fin: 0.5
+      tc_Tatoeba-train-v2021-08-07: 0.5
+
+marian-args:
+  training-backward:
+    disp-freq: 10
+    save-freq: 100
+    valid-freq: 100
+    after: 500u
+  training-teacher-base:
+    disp-freq: 10
+    save-freq: 100
+    valid-freq: 100
+    after: 500u
+  training-teacher-finetuned:
+    disp-freq: 10
+    save-freq: 100
+    valid-freq: 100
+    after: 500u
+  training-student:
+    disp-freq: 10
+    save-freq: 100
+    valid-freq: 100
+    after: 500u
+  training-student-finetuned:
+    disp-freq: 10
+    save-freq: 100
+    valid-freq: 100
+    after: 500u
+  decoding-backward:
+    mini-batch-words: 2000
+  decoding-teacher:
+    mini-batch-words: 1000
 
 #marian-args:
 #  decoding-teacher:

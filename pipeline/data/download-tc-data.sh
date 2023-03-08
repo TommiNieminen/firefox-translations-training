@@ -20,8 +20,8 @@ mkdir -p "${tmp}"
 
 archive_path="${tmp}/${version}-${src_three_letter}-${trg_three_letter}.tar"
 
-#TODO: extract tar, move and rename files, fix Snakefile rule if needed 
-wget -O "${archive_path}" "https://object.pouta.csc.fi/${version}/${src_three_letter}-${trg_three_letter}.tar"
+#try both combinations of language codes 
+wget -O "${archive_path}" "https://object.pouta.csc.fi/${version}/${src_three_letter}-${trg_three_letter}.tar" || wget -O "${archive_path}" "https://object.pouta.csc.fi/${version}/${trg_three_letter}-${src_three_letter}.tar"
 
 #extract all in same directory, saves the trouble of parsing directory structure
 tar -xf "${archive_path}" --directory ${tmp} --strip-components 4 

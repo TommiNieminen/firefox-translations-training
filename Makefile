@@ -4,10 +4,10 @@
 SHELL=/bin/bash
 
 ### 1. change these settings or override with env variables
-CONFIG=configs/config.opusmt.yml
+CONFIG=configs/config.opusmt-test.yml
 CONDA_PATH=../mambaforge
 SNAKEMAKE_OUTPUT_CACHE=../cache
-PROFILE=local
+#PROFILE=local
 # execution rule or path to rule output, default is all
 TARGET=
 EXTRA=

@@ -564,8 +564,9 @@ if 'opusmt-teacher' in config['experiment']:
         conda: "envs/base.yml"
         threads: 1
         output: model=f'{teacher_base_dir}{{ens}}/{best_model}',vocab=f'{teacher_base_dir}{{ens}}/vocab.yml'
+        params: teacher_dir=f'{teacher_base_dir}{{ens}}'
         shell: '''bash pipeline/opusmt/download-model.sh \
-                    "{opusmt_teacher}" "{teacher_base_dir}{{ens}}" "{best_model}" >> {log} 2>&1'''
+                    "{opusmt_teacher}" "{params.teacher_dir}" "{best_model}" >> {log} 2>&1'''
 else:
     rule train_teacher:
         message: "Training teacher on all data"
